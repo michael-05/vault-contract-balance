@@ -1,7 +1,7 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 
-import "dotenv/config"
+import "dotenv/config";
 
 const config: HardhatUserConfig = {
   networks: {
@@ -49,7 +49,7 @@ const config: HardhatUserConfig = {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
   solidity: {
-    version: '0.8.9',
+    version: '0.8.16',
     settings: {
       optimizer: {
         enabled: true,
@@ -63,6 +63,6 @@ const config: HardhatUserConfig = {
       },
     },
   },
-}
+};
 
 export default config;

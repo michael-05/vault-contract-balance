@@ -25,7 +25,7 @@ describe("VaultContract", function () {
     }
 
     describe("Deposit & Withdraw", function () {
-        it("should find account2 and account3", async function () {
+        it("should find account2 and account3 if there are three depositors", async function () {
             const { vaultContract, myToken, account1, account2, account3 } = await loadFixture(deployContractsFixture);
             const tokenAddress = myToken.address;
 
@@ -74,27 +74,109 @@ describe("VaultContract", function () {
             expect(top2Amount).to.equal(await vaultContract.vault(tokenAddress, account2.address));
 
 
-            // account1 withdraw from vault
+            // account1 withdraw 10 tokens from vault
             // expect token balance of account1 to be 100
             // expect token balance of vault to be 60 - 10 = 50
-            await vaultContract.connect(account1).withdraw(tokenAddress);
+            await vaultContract.connect(account1).withdraw(tokenAddress, 10);
             expect(await myToken.balanceOf(account1.address)).to.equal(100);
             expect(await myToken.balanceOf(vaultContract.address)).to.equal(50);
 
 
-            // account2 withdraw from vault
+            // account2 withdraw 20 tokens from vault
             // expect token balance of account2 to be 100
             // expect token balance of vault to be 50 - 20 = 30
-            await vaultContract.connect(account2).withdraw(tokenAddress);
+            await vaultContract.connect(account2).withdraw(tokenAddress, 20);
             expect(await myToken.balanceOf(account2.address)).to.equal(100);
             expect(await myToken.balanceOf(vaultContract.address)).to.equal(30);
 
 
-            // account3 withdraw from vault
+            // account3 withdraw 30 tokens from vault
             // expect token balance of account3 to be 100
             // expect token balance of vault to be 30 - 30 = 0
-            await vaultContract.connect(account3).withdraw(tokenAddress);
+            await vaultContract.connect(account3).withdraw(tokenAddress, 30);
             expect(await myToken.balanceOf(account3.address)).to.equal(100);
+            expect(await myToken.balanceOf(vaultContract.address)).to.equal(0);
+        });
+
+        it("should find account1 and account2 if there are only two depositors", async function () {
+            const { vaultContract, myToken, account1, account2 } = await loadFixture(deployContractsFixture);
+            const tokenAddress = myToken.address;
+
+
+            // account1 approve 10 tokens to vault
+            // expect token allowance of account1 to vault to be 10
+            // account1 deposits 10 tokens to vault
+            // expect token balance of account1 to be 90
+            // expect token balance of vault to be 10
+            await myToken.connect(account1).approve(vaultContract.address, 10);
+            expect(await myToken.allowance(account1.address, vaultContract.address)).to.equal(10);
+            await vaultContract.connect(account1).deposit(tokenAddress, 10);
+            expect(await myToken.balanceOf(account1.address)).to.equal(90);
+            expect(await myToken.balanceOf(vaultContract.address)).to.equal(10);
+
+
+            // account2 approve 20 tokens to vault
+            // expect token allowance of account2 to vault to be 20
+            // account2 deposits 20 tokens to vault
+            // expect token balance of account2 to be 80
+            // expect token balance of vault to be 10 + 20 = 30
+            await myToken.connect(account2).approve(vaultContract.address, 20);
+            expect(await myToken.allowance(account2.address, vaultContract.address)).to.equal(20);
+            await vaultContract.connect(account2).deposit(tokenAddress, 20);
+            expect(await myToken.balanceOf(account2.address)).to.equal(80);
+            expect(await myToken.balanceOf(vaultContract.address)).to.equal(30);
+
+
+            // expect two wealthies are account2 and account3
+            const [top1Address, top1Amount, top2Address, top2Amount] = await vaultContract.twoWealthies(tokenAddress);
+            expect(top1Address).to.equal(account2.address);
+            expect(top1Amount).to.equal(await vaultContract.vault(tokenAddress, account2.address));
+            expect(top2Address).to.equal(account1.address);
+            expect(top2Amount).to.equal(await vaultContract.vault(tokenAddress, account1.address));
+
+
+            // account1 withdraw 10 tokens from vault
+            // expect token balance of account1 to be 100
+            // expect token balance of vault to be 30 - 10 = 20
+            await vaultContract.connect(account1).withdraw(tokenAddress, 10);
+            expect(await myToken.balanceOf(account1.address)).to.equal(100);
+            expect(await myToken.balanceOf(vaultContract.address)).to.equal(20);
+
+
+            // account2 withdraw 20 tokens from vault
+            // expect token balance of account2 to be 100
+            // expect token balance of vault to be 20 - 20 = 0
+            await vaultContract.connect(account2).withdraw(tokenAddress, 20);
+            expect(await myToken.balanceOf(account2.address)).to.equal(100);
+            expect(await myToken.balanceOf(vaultContract.address)).to.equal(0);
+        });
+
+        it("should revert twoWealthies() function if there are no more than two depositors", async function () {
+            const { vaultContract, myToken, account1 } = await loadFixture(deployContractsFixture);
+            const tokenAddress = myToken.address;
+
+
+            // account1 approve 10 tokens to vault
+            // expect token allowance of account1 to vault to be 10
+            // account1 deposits 10 tokens to vault
+            // expect token balance of account1 to be 90
+            // expect token balance of vault to be 10
+            await myToken.connect(account1).approve(vaultContract.address, 10);
+            expect(await myToken.allowance(account1.address, vaultContract.address)).to.equal(10);
+            await vaultContract.connect(account1).deposit(tokenAddress, 10);
+            expect(await myToken.balanceOf(account1.address)).to.equal(90);
+            expect(await myToken.balanceOf(vaultContract.address)).to.equal(10);
+
+
+            // expect twoWealthies function to be failed
+            expect(vaultContract.twoWealthies(tokenAddress)).to.be.revertedWith("No more than two depositors.");
+
+
+            // account1 withdraw 10 tokens from vault
+            // expect token balance of account1 to be 100
+            // expect token balance of vault to be 10 - 10 = 0
+            await vaultContract.connect(account1).withdraw(tokenAddress, 10);
+            expect(await myToken.balanceOf(account1.address)).to.equal(100);
             expect(await myToken.balanceOf(vaultContract.address)).to.equal(0);
         });
     });

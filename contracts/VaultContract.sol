@@ -1,68 +1,58 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+pragma solidity 0.8.16;
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract VaultContract is Ownable {
-    using SafeMath for uint256;
+contract VaultContract is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     constructor() {}
 
     // vault[tokenAddress][depositorAddress]
     mapping(address => mapping(address => uint256)) public vault;
-    mapping(address => address[]) depositors;
+    mapping(address => address[]) private depositors;
 
-    function deposit(IERC20 _token, uint256 _amount) external {
-        require(
-            _token.allowance(msg.sender, address(this)) >= _amount,
-            "Approve tokens first!"
-        );
-        _token.safeTransferFrom(msg.sender, address(this), _amount);
+    function deposit(address _token, uint256 _amount) external nonReentrant {
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
 
-        vault[address(_token)][msg.sender] = vault[address(_token)][msg.sender]
-            .add(_amount);
-        depositors[address(_token)].push(msg.sender);
+        vault[_token][msg.sender] += _amount;
+        depositors[_token].push(msg.sender);
     }
 
-    function withdraw(IERC20 _token) external {
+    function withdraw(address _token, uint256 _amount) external nonReentrant {
         require(
-            vault[address(_token)][msg.sender] > 0,
-            "No tokens to withdraw."
+            vault[_token][msg.sender] >= _amount,
+            "Not enough tokens to withdraw."
         );
-        _token.safeTransfer(msg.sender, vault[address(_token)][msg.sender]);
+        IERC20(_token).safeTransfer(msg.sender, _amount);
 
-        vault[address(_token)][msg.sender] = 0;
-        uint256 indexOfWithdrawer = findWithdrawerIndex(
-            address(_token),
-            msg.sender
-        );
-        depositors[address(_token)][indexOfWithdrawer] = depositors[
-            address(_token)
-        ][depositors[address(_token)].length - 1];
-        delete depositors[address(_token)][
-            depositors[address(_token)].length - 1
-        ];
+        vault[_token][msg.sender] -= _amount;
+        if (vault[_token][msg.sender] == 0) {
+            uint256 indexOfWithdrawer = findWithdrawerIndex(_token, msg.sender);
+            depositors[_token][indexOfWithdrawer] = depositors[_token][
+                depositors[_token].length - 1
+            ];
+            depositors[_token].pop();
+        }
     }
 
-    function findWithdrawerIndex(address tokenAddress, address withdrawer)
-        public
+    function findWithdrawerIndex(address _token, address _withdrawer)
+        private
         view
         returns (uint256)
     {
-        uint256 len = depositors[tokenAddress].length;
-        for (uint256 i = 0; i < len; i++) {
-            if (depositors[tokenAddress][i] == withdrawer) {
+        for (uint256 i = 0; i < depositors[_token].length; i++) {
+            if (depositors[_token][i] == _withdrawer) {
                 return i;
             }
         }
         return 0;
     }
 
-    function twoWealthies(IERC20 _token)
+    function twoWealthies(address _token)
         external
         view
         returns (
@@ -72,12 +62,11 @@ contract VaultContract is Ownable {
             uint256 top2Amount
         )
     {
-        address tokenAddress;
-        tokenAddress = address(_token);
-        uint256 len = depositors[tokenAddress].length;
-        for (uint256 i = 0; i < len; i++) {
-            address curAddress = depositors[tokenAddress][i];
-            uint256 curAmount = vault[tokenAddress][curAddress];
+        require(depositors[_token].length >= 2, "No more than two depositors.");
+
+        for (uint256 i = 0; i < depositors[_token].length; i++) {
+            address curAddress = depositors[_token][i];
+            uint256 curAmount = vault[_token][curAddress];
 
             if (curAmount > top1Amount) {
                 top2Amount = top1Amount;
